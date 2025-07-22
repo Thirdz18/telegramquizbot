@@ -1,5 +1,6 @@
 import os
 import random
+import traceback  # ✅ Added for detailed error logs
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from web3 import Web3
@@ -73,13 +74,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def send_gs_reward(to_address):
     try:
         contract_address = Web3.to_checksum_address("0xdD2FD4581271e230360230F9337D5c0430Bf44C0")  # Replace with actual G$ token contract
-        token_abi = [{
+        token_abi = [ {
             "constant": False,
             "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}],
             "name": "transfer",
             "outputs": [{"name": "", "type": "bool"}],
             "type": "function"
-        }]
+        } ]
         contract = web3.eth.contract(address=contract_address, abi=token_abi)
         nonce = web3.eth.get_transaction_count(SENDER_ADDRESS)
         tx = contract.functions.transfer(to_address, Web3.to_wei(0.1, 'ether')).build_transaction({
@@ -93,7 +94,7 @@ def send_gs_reward(to_address):
         print("Transaction sent:", tx_hash.hex())
         return True
     except Exception as e:
-        print("Error sending reward:", e)
+        traceback.print_exc()  # ✅ More detailed error output in logs
         return False
 
 if __name__ == '__main__':
