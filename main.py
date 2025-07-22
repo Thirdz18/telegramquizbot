@@ -62,6 +62,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_id in user_state:
         state = user_state[user_id]
+        # Check if awaiting wallet address
         if state.get("awaiting_wallet"):
             if Web3.is_address(text):
                 await update.message.reply_text("💸 Sending G$ reward...")
@@ -72,50 +73,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await update.message.reply_text("❌ Failed to send reward.")
                 user_state.pop(user_id)
             else:
-                await update.message.reply_text("⚠️ Invalid wallet address. Please try again.")
+                await update.message.reply_text("❌ Invalid wallet address. Please send a valid Celo wallet address.")
+            return
+
+        # If not awaiting wallet, check answer
+        current = state["current"]
+        correct_answer = quiz[current]["answer"].lower()
+        if text.lower() == correct_answer:
+            state["score"] += 1
+            await update.message.reply_text("✅ Correct!")
         else:
-            current = state["current"]
-            correct_answer = quiz[current]["answer"]
-            if text.lower() == correct_answer.lower():
-                state["score"] += 1
-                await update.message.reply_text("✅ Correct!")
-            else:
-                await update.message.reply_text(f"❌ Incorrect. The correct answer was: {correct_answer}")
-            state["current"] += 1
-            await send_question(update, context)
+            await update.message.reply_text(f"❌ Wrong! The correct answer was: {quiz[current]['answer']}")
+
+        # Move to next question
+        state["current"] += 1
+        await send_question(update, context)
     else:
-        await update.message.reply_text("Type /quiz to begin.")
+        await update.message.reply_text("Please start the quiz with /quiz.")
 
-def send_gs_reward(to_address):
-    try:
-        contract_address = Web3.to_checksum_address("0xdD2FD4581271e230360230F9337D5c0430Bf44C0")  # Replace with actual G$ token address
-        token_abi = [{
-            "constant": False,
-            "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}],
-            "name": "transfer",
-            "outputs": [{"name": "", "type": "bool"}],
-            "type": "function"
-        }]
-        contract = web3.eth.contract(address=contract_address, abi=token_abi)
-        nonce = web3.eth.get_transaction_count(SENDER_ADDRESS)
-        tx = contract.functions.transfer(to_address, Web3.to_wei(0.1, 'ether')).build_transaction({
-            'from': SENDER_ADDRESS,
-            'nonce': nonce,
-            'gas': 200000,
-            'gasPrice': web3.to_wei('0.5', 'gwei')
-        })
-        signed_tx = web3.eth.account.sign_transaction(tx, private_key=PRIVATE_KEY)
-        tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        print("Transaction sent:", tx_hash.hex())
-        return True
-    except Exception as e:
-        print("Error sending reward:", e)
-        return False
+def send_gs_reward(wallet_address: str) -> bool:
+    # Dummy implementation: Replace with your actual payment logic using web3.py
+    print(f"Sending G$ reward to {wallet_address} from {SENDER_ADDRESS}")
+    # Example: return True if successful, False otherwise
+    return True
 
-if __name__ == '__main__':
-    print("Starting bot...")
+import asyncio
+
+async def main():
     app = ApplicationBuilder().token(TOKEN).build()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("quiz", quiz_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.run_polling()
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+    logger.info("Starting bot...")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
