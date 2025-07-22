@@ -1,14 +1,27 @@
 import os
+import logging
 import random
-import traceback  # ✅ Added for detailed error logs
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 from web3 import Web3
+
+# Enable logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 PRIVATE_KEY = os.getenv("SENDER_PRIVATE_KEY")
 CELO_NODE = os.getenv("CELO_NODE", "https://forno.celo.org")
+
+if not TOKEN:
+    raise ValueError("TELEGRAM_TOKEN is not set in environment variables.")
+if not PRIVATE_KEY:
+    raise ValueError("SENDER_PRIVATE_KEY is not set in environment variables.")
+
 SENDER_ADDRESS = Web3().eth.account.from_key(PRIVATE_KEY).address
 
 # Web3 setup
@@ -35,7 +48,9 @@ async def send_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     current = user_state[user_id]["current"]
     if current >= len(quiz):
-        await update.message.reply_text(f"✅ You got {user_state[user_id]['score']} out of {len(quiz)}.\nSend your Celo wallet address to claim your G$ reward.")
+        await update.message.reply_text(
+            f"✅ You got {user_state[user_id]['score']} out of {len(quiz)}.\nSend your Celo wallet address to claim your G$ reward."
+        )
         user_state[user_id]["awaiting_wallet"] = True
         return
     question = quiz[current]["question"]
@@ -73,14 +88,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def send_gs_reward(to_address):
     try:
-        contract_address = Web3.to_checksum_address("0xdD2FD4581271e230360230F9337D5c0430Bf44C0")  # Replace with actual G$ token contract
-        token_abi = [ {
+        contract_address = Web3.to_checksum_address("0xdD2FD4581271e230360230F9337D5c0430Bf44C0")  # Replace with actual G$ token address
+        token_abi = [{
             "constant": False,
             "inputs": [{"name": "_to", "type": "address"}, {"name": "_value", "type": "uint256"}],
             "name": "transfer",
             "outputs": [{"name": "", "type": "bool"}],
             "type": "function"
-        } ]
+        }]
         contract = web3.eth.contract(address=contract_address, abi=token_abi)
         nonce = web3.eth.get_transaction_count(SENDER_ADDRESS)
         tx = contract.functions.transfer(to_address, Web3.to_wei(0.1, 'ether')).build_transaction({
@@ -94,10 +109,11 @@ def send_gs_reward(to_address):
         print("Transaction sent:", tx_hash.hex())
         return True
     except Exception as e:
-        traceback.print_exc()  # ✅ More detailed error output in logs
+        print("Error sending reward:", e)
         return False
 
 if __name__ == '__main__':
+    print("Starting bot...")
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("quiz", quiz_command))
